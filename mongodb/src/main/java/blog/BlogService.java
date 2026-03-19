@@ -1,11 +1,19 @@
 package blog;
 
+import com.mongodb.client.AggregateIterable;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.UpdateOptions;
+import com.mongodb.client.model.Updates;
+import com.mongodb.client.result.UpdateResult;
 import org.bson.Document;
 import org.bson.conversions.Bson;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 public class BlogService {
 
@@ -17,17 +25,62 @@ public class BlogService {
 
     public List<Document> findPostsWithMoreThanNComments(int minComments) {
         // TODO: Реализуйте поиск постов с количеством комментариев > minComments
-        throw new UnsupportedOperationException("Not implemented yet");
+        List<Document> documentList =new ArrayList<>();
+        Bson filter = Filters.expr(
+                new Document("$and", Arrays.asList(
+                        new Document("$isArray", "$comments"),
+                        new Document("$gt", Arrays.asList(
+                                new Document("$size", "$comments"),
+                                minComments
+                        ))
+                ))
+        );
+        for(Document document:posts.find(filter)){
+            documentList.add(document);
+        }
+        return documentList;
     }
 
     public long getTotalViews() {
         // TODO: Реализуйте подсчет суммарного количества просмотров
-        throw new UnsupportedOperationException("Not implemented yet");
+        AggregateIterable<Document> result = posts.aggregate(Arrays.asList(
+                new Document("$match",new Document("views",new Document("$exists",true))),
+                new Document("$group",new Document("_id",null)
+                        .append("total",new Document("$sum","$views"))
+        )));
+        Document total= result.first();
+        if(total!=null){
+            Number count = total.get("total",Number.class);
+            return count!=null?count.longValue():0L;
+        }
+        return 0L;
     }
 
     public long addRatingToCommentsWithoutIt(String postTitle) {
         // TODO: Реализуйте добавление поля rating к комментариям без этого поля
-        throw new UnsupportedOperationException("Not implemented yet");
+        Document doc = posts.find(Filters.eq("title",postTitle)).first();
+        if(doc==null){
+            return 0;
+        }
+        List<Document> comment = doc.getList("comments", Document.class);
+        if(comment.isEmpty()||comment==null){
+            return 0;
+        }
+        long count = comment.stream()
+                .filter(document -> !document.containsKey("rating"))
+                .count();
+        if(count>0){
+            Bson filter = Filters.eq("title",postTitle);
+            Bson update= Updates.set("comments.$[elem].rating",0);
+            UpdateOptions options=new UpdateOptions().arrayFilters(
+                    List.of(Filters.exists("elem.rating",false))
+            );
+            UpdateResult result= posts.updateOne(filter,update,options);
+            if(result.getModifiedCount()>0){
+                return count;
+            }
+        }
+        return 0;
     }
 
     /**
@@ -36,7 +89,7 @@ public class BlogService {
      */
     public void insertSampleData() {
         posts.drop();
-        
+
         List<Document> samplePosts = List.of(
             new Document("title", "Введение в NoSQL базы данных")
                 .append("author", "Иван Петров")
@@ -47,7 +100,7 @@ public class BlogService {
                     new Document("user", "Алексей").append("text", "Очень полезно, спасибо").append("date", "2026-02-10T14:20:00Z")
                 ))
                 .append("published_at", "2026-02-09T09:00:00Z"),
-            
+
             new Document("title", "Работа с MongoDB: основы")
                 .append("author", "Елена Смирнова")
                 .append("tags", List.of("mongodb", "nosql", "javascript"))
@@ -59,7 +112,7 @@ public class BlogService {
                     new Document("user", "Анна").append("text", "Буду использовать в проекте").append("date", "2026-02-12T13:20:00Z").append("rating", 5)
                 ))
                 .append("published_at", "2026-02-11T08:00:00Z"),
-            
+
             new Document("title", "ClickHouse для аналитики")
                 .append("author", "Иван Петров")
                 .append("tags", List.of("clickhouse", "analytics", "bigdata"))
@@ -68,13 +121,13 @@ public class BlogService {
                     new Document("user", "Павел").append("text", "Интересный подход").append("date", "2026-02-12T10:00:00Z")
                 ))
                 .append("published_at", "2026-02-12T07:30:00Z"),
-            
+
             new Document("title", "Redis: кэширование и не только")
                 .append("author", "Дмитрий Козлов")
                 .append("tags", List.of("redis", "cache", "performance"))
                 .append("comments", List.of())
                 .append("published_at", "2026-02-13T10:00:00Z"),
-            
+
             new Document("title", "Cassandra vs ScyllaDB")
                 .append("author", "Елена Смирнова")
                 .append("tags", List.of("cassandra", "scylla", "comparison"))
@@ -84,7 +137,7 @@ public class BlogService {
                     new Document("user", "Михаил").append("text", "Хочу попробовать оба варианта").append("date", "2026-02-13T17:00:00Z")
                 ))
                 .append("published_at", "2026-02-13T11:00:00Z"),
-            
+
             new Document("title", "Node.js и MongoDB: полное руководство")
                 .append("author", "Алексей Николаев")
                 .append("tags", List.of("nodejs", "mongodb", "backend"))
@@ -97,7 +150,7 @@ public class BlogService {
                     new Document("user", "Юлия").append("text", "Ждём часть 2").append("date", "2026-02-14T16:45:00Z").append("rating", 4)
                 ))
                 .append("published_at", "2026-02-14T08:00:00Z"),
-            
+
             new Document("title", "Проектирование схем в NoSQL")
                 .append("author", "Иван Петров")
                 .append("tags", List.of("nosql", "design", "architecture"))
@@ -107,7 +160,7 @@ public class BlogService {
                 ))
                 .append("published_at", "2026-02-14T09:30:00Z")
         );
-        
+
         posts.insertMany(samplePosts);
     }
 }
