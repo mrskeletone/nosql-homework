@@ -11,7 +11,7 @@ create table post_on_create
     created_at timestamp,
     user_id    int,
     username   varchar,
-    primary key ( user_id, created_at, post_id )
+    primary key ( user_id, created_at )
 ) with clustering order by (created_at desc);
 select post_id, content, created_at
 from post_on_create
