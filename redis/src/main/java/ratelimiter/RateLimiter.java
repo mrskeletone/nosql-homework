@@ -4,9 +4,13 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.temporal.TemporalField;
+import java.util.Date;
+import java.util.UUID;
+
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-
 public class RateLimiter {
 
   private final Jedis redis;
@@ -23,7 +27,16 @@ public class RateLimiter {
 
   public boolean pass() {
     // TODO: Implementation
-    return false;
+      long saveTimes= System.currentTimeMillis();
+    redis.zremrangeByScore(label,
+            "-inf",
+            String.valueOf(saveTimes-timeWindowSeconds*1000));
+    if(redis.zcard(label) < maxRequestCount) {
+        redis.zadd(label, saveTimes, label + UUID.randomUUID());
+        return true;
+    }    else{
+        return false;
+    }
   }
 
   public static void main(String[] args) {
