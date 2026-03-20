@@ -27,11 +27,12 @@ public class RateLimiter {
 
   public boolean pass() {
     // TODO: Implementation
+      long saveTimes= System.currentTimeMillis();
     redis.zremrangeByScore(label,
             "-inf",
-            String.valueOf(System.currentTimeMillis()-timeWindowSeconds*1000));
+            String.valueOf(saveTimes-timeWindowSeconds*1000));
     if(redis.zcard(label) < maxRequestCount) {
-        redis.zadd(label, System.currentTimeMillis(), label + UUID.randomUUID());
+        redis.zadd(label, saveTimes, label + UUID.randomUUID());
         return true;
     }    else{
         return false;
